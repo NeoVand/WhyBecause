@@ -1,7 +1,4 @@
-import { useEffect, useState, ChangeEvent } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react'
 import { 
   docFlowKit, 
   useProject, 
@@ -16,374 +13,30 @@ import {
   DEFAULT_LLM_SETTINGS
 } from './doc-flow-kit'
 import { LLMSettings } from './doc-flow-kit/LLMService'
+import { useUser } from './doc-flow-kit/UserContext'
+import LoginScreen from './components/LoginScreen'
+import AppLayout from './components/AppLayout'
+import ProjectDashboard from './components/ProjectDashboard'
+import { Box, CircularProgress, Typography, Alert, Stack } from '@mui/material'
 
 function App() {
-  const { project, loadProject, saveProject, createNewProject } = useProject()
-  const [status, setStatus] = useState<string>('Initializing...')
-  const [projectNameInput, setProjectNameInput] = useState<string>('')
-  const [activeDiagramDoc, setActiveDiagramDoc] = useState<DiagramDoc | null>(null)
-  const [activeFlowDoc, setActiveFlowDoc] = useState<FlowDoc | null>(null)
-  const [activeAgentDoc, setActiveAgentDoc] = useState<AgentDoc | null>(null)
-  const [showFlowRunner, setShowFlowRunner] = useState<boolean>(false)
+  // User context for authentication
+  const { currentUser, isLoading: userLoading } = useUser();
   
-  // Handle project name input change
-  const handleProjectNameChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setProjectNameInput(e.target.value)
-  }
+  // Project context for project management
+  const { project, loadProject, saveProject, createNewProject } = useProject();
   
-  // Handle updating the project name
-  const handleUpdateProjectName = async () => {
-    if (!project || !projectNameInput) return
-    
-    // Create a copy of the project with updated name
-    const updatedProject = {
-      ...project,
-      title: projectNameInput,
-      content: {
-        ...project.content,
-        name: projectNameInput
-      }
-    }
-    
-    try {
-      await saveProject(updatedProject)
-      setStatus('Project updated successfully')
-    } catch (error) {
-      console.error('Error updating project:', error)
-      setStatus(`Error updating project: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
+  // State for documents and UI
+  const [status, setStatus] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [activeDiagramDoc, setActiveDiagramDoc] = useState<DiagramDoc | null>(null);
+  const [activeFlowDoc, setActiveFlowDoc] = useState<FlowDoc | null>(null);
+  const [activeAgentDoc, setActiveAgentDoc] = useState<AgentDoc | null>(null);
+  const [showFlowRunner, setShowFlowRunner] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  // Handle creating a new project
-  const handleCreateProject = async () => {
-    if (!projectNameInput) {
-      setStatus('Please enter a project name')
-      return
-    }
-    
-    try {
-      const newProjectId = await createNewProject(projectNameInput)
-      setStatus(`New project created with ID: ${newProjectId}`)
-      setProjectNameInput('')
-    } catch (error) {
-      console.error('Error creating project:', error)
-      setStatus(`Error creating project: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Create a new diagram and add it to the current project
-  async function createNewDiagram() {
-    if (!project) {
-      setStatus('No project loaded. Cannot create diagram.')
-      return
-    }
-    
-    try {
-      // 1) Create the DiagramDoc
-      const newDiagram: DiagramDoc = {
-        docId: crypto.randomUUID(),
-        docType: 'Diagram',
-        title: 'Untitled Diagram',
-        content: {
-          nodes: [],
-          edges: [],
-        },
-      }
-      await docFlowKit.createDocument(newDiagram)
-
-      // 2) Add reference to project
-      const newRef: DocRef = {
-        docId: newDiagram.docId,
-        docType: 'Diagram',
-        title: newDiagram.title,
-      }
-      
-      const updatedProject = {
-        ...project,
-        content: {
-          ...project.content,
-          documents: [...project.content.documents, newRef],
-        },
-      }
-      await saveProject(updatedProject)
-
-      setStatus('New Diagram Created & Linked!')
-    } catch (error) {
-      console.error('Error creating diagram:', error)
-      setStatus(`Error creating diagram: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Create a new flow and add it to the current project
-  async function createNewFlow() {
-    if (!project) {
-      setStatus('No project loaded. Cannot create flow.')
-      return
-    }
-    
-    try {
-      // 1) Create the FlowDoc
-      const newFlow: FlowDoc = {
-        docId: crypto.randomUUID(),
-        docType: 'Flow',
-        title: 'Untitled Flow',
-        content: {
-          nodes: [],
-          edges: [],
-        },
-      }
-      await docFlowKit.createDocument(newFlow)
-
-      // 2) Add reference to project
-      const newRef: DocRef = {
-        docId: newFlow.docId,
-        docType: 'Flow',
-        title: newFlow.title,
-      }
-      
-      const updatedProject = {
-        ...project,
-        content: {
-          ...project.content,
-          documents: [...project.content.documents, newRef],
-        },
-      }
-      await saveProject(updatedProject)
-
-      setStatus('New Flow Created & Linked!')
-    } catch (error) {
-      console.error('Error creating flow:', error)
-      setStatus(`Error creating flow: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Create a new agent and add it to the current project
-  async function createNewAgent() {
-    if (!project) {
-      setStatus('No project loaded. Cannot create agent.')
-      return
-    }
-    
-    try {
-      // 1) Create the AgentDoc
-      const newAgent: AgentDoc = {
-        docId: crypto.randomUUID(),
-        docType: 'Agent',
-        title: 'Untitled Agent',
-        content: {
-          promptTemplate: `# Agent Prompt Template
-
-You are a helpful assistant that provides analysis for Why-Because Analysis (WBA).
-
-Please help the user with the following task:
-{input}
-
-Provide a thoughtful response that helps with their analysis.`
-        },
-      }
-      await docFlowKit.createDocument(newAgent)
-
-      // 2) Add reference to project
-      const newRef: DocRef = {
-        docId: newAgent.docId,
-        docType: 'Agent',
-        title: newAgent.title,
-      }
-      
-      const updatedProject = {
-        ...project,
-        content: {
-          ...project.content,
-          documents: [...project.content.documents, newRef],
-        },
-      }
-      await saveProject(updatedProject)
-
-      setStatus('New Agent Created & Linked!')
-    } catch (error) {
-      console.error('Error creating agent:', error)
-      setStatus(`Error creating agent: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Load a diagram by ID
-  async function loadDiagram(docId: string) {
-    try {
-      // Close any active documents
-      setActiveFlowDoc(null);
-      setActiveAgentDoc(null);
-      
-      const diagram = await docFlowKit.getDocument(docId) as DiagramDoc | null
-      
-      if (!diagram) {
-        setStatus(`Error: Diagram with ID ${docId} not found`)
-        return
-      }
-      
-      if (diagram.docType !== 'Diagram') {
-        setStatus(`Error: Document with ID ${docId} is not a Diagram`)
-        return
-      }
-      
-      setActiveDiagramDoc(diagram)
-      setStatus(`Diagram "${diagram.title}" loaded`)
-    } catch (error) {
-      console.error('Error loading diagram:', error)
-      setStatus(`Error loading diagram: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Load a flow by ID
-  async function loadFlow(docId: string) {
-    try {
-      // Close any active documents
-      setActiveDiagramDoc(null);
-      setActiveAgentDoc(null);
-      
-      const flow = await docFlowKit.getDocument(docId) as FlowDoc | null
-      
-      if (!flow) {
-        setStatus(`Error: Flow with ID ${docId} not found`)
-        return
-      }
-      
-      if (flow.docType !== 'Flow') {
-        setStatus(`Error: Document with ID ${docId} is not a Flow`)
-        return
-      }
-      
-      setActiveFlowDoc(flow)
-      setStatus(`Flow "${flow.title}" loaded`)
-    } catch (error) {
-      console.error('Error loading flow:', error)
-      setStatus(`Error loading flow: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Load an agent by ID
-  async function loadAgent(docId: string) {
-    try {
-      // Close any active documents
-      setActiveDiagramDoc(null);
-      setActiveFlowDoc(null);
-      
-      const agent = await docFlowKit.getDocument(docId) as AgentDoc | null
-      
-      if (!agent) {
-        setStatus(`Error: Agent with ID ${docId} not found`)
-        return
-      }
-      
-      if (agent.docType !== 'Agent') {
-        setStatus(`Error: Document with ID ${docId} is not an Agent`)
-        return
-      }
-      
-      setActiveAgentDoc(agent)
-      setStatus(`Agent "${agent.title}" loaded`)
-    } catch (error) {
-      console.error('Error loading agent:', error)
-      setStatus(`Error loading agent: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Handle diagram updates
-  function handleDiagramUpdate(updatedDoc: DiagramDoc) {
-    setActiveDiagramDoc(updatedDoc)
-    
-    // Also update the reference in the project if the title changed
-    if (project && updatedDoc.title !== activeDiagramDoc?.title) {
-      const updatedDocuments = project.content.documents.map(doc => 
-        doc.docId === updatedDoc.docId 
-          ? { ...doc, title: updatedDoc.title }
-          : doc
-      )
-      
-      const updatedProject = {
-        ...project,
-        content: {
-          ...project.content,
-          documents: updatedDocuments
-        }
-      }
-      
-      // Save the updated project
-      saveProject(updatedProject).catch(error => {
-        console.error('Error updating project with new diagram title:', error)
-      })
-    }
-  }
-
-  // Handle flow updates
-  function handleFlowUpdate(updatedDoc: FlowDoc) {
-    setActiveFlowDoc(updatedDoc)
-    
-    // Also update the reference in the project if the title changed
-    if (project && updatedDoc.title !== activeFlowDoc?.title) {
-      const updatedDocuments = project.content.documents.map(doc => 
-        doc.docId === updatedDoc.docId 
-          ? { ...doc, title: updatedDoc.title }
-          : doc
-      )
-      
-      const updatedProject = {
-        ...project,
-        content: {
-          ...project.content,
-          documents: updatedDocuments
-        }
-      }
-      
-      // Save the updated project
-      saveProject(updatedProject).catch(error => {
-        console.error('Error updating project with new flow title:', error)
-      })
-    }
-  }
-
-  // Handle agent updates
-  function handleAgentUpdate(updatedDoc: AgentDoc) {
-    setActiveAgentDoc(updatedDoc)
-    
-    // Also update the reference in the project if the title changed
-    if (project && updatedDoc.title !== activeAgentDoc?.title) {
-      const updatedDocuments = project.content.documents.map(doc => 
-        doc.docId === updatedDoc.docId 
-          ? { ...doc, title: updatedDoc.title }
-          : doc
-      )
-      
-      const updatedProject = {
-        ...project,
-        content: {
-          ...project.content,
-          documents: updatedDocuments
-        }
-      }
-      
-      // Save the updated project
-      saveProject(updatedProject).catch(error => {
-        console.error('Error updating project with new agent title:', error)
-      })
-    }
-  }
-
-  // Close the active diagram
-  function closeActiveDiagram() {
-    setActiveDiagramDoc(null)
-  }
-
-  // Close the active flow
-  function closeActiveFlow() {
-    setActiveFlowDoc(null)
-  }
-
-  // Close the active agent
-  function closeActiveAgent() {
-    setActiveAgentDoc(null)
-  }
-
-  // Add a function to update the project's LLM settings
+  // Update LLM settings
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function updateLLMSettings(partialSettings: Partial<LLMSettings>) {
     if (!project) return;
     
@@ -409,470 +62,559 @@ Provide a thoughtful response that helps with their analysis.`
       setStatus('LLM settings updated');
     } catch (error) {
       console.error('Error updating LLM settings:', error);
-      setStatus(`Error updating LLM settings: ${error instanceof Error ? error.message : String(error)}`);
+      setError(`Error updating LLM settings: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
+  // Create a new diagram
+  async function createNewDiagram() {
+    if (!project) {
+      setError('No project loaded. Cannot create diagram.');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Create the DiagramDoc
+      const newDiagram: DiagramDoc = {
+        docId: crypto.randomUUID(),
+        docType: 'Diagram',
+        title: 'Untitled Diagram',
+        content: {
+          nodes: [],
+          edges: [],
+        },
+      };
+      await docFlowKit.createDocument(newDiagram);
+
+      // Add reference to project
+      const newRef: DocRef = {
+        docId: newDiagram.docId,
+        docType: 'Diagram',
+        title: newDiagram.title,
+      };
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: [...project.content.documents, newRef],
+        },
+      };
+      await saveProject(updatedProject);
+
+      setStatus('New diagram created');
+      
+      // Open the new diagram
+      loadDiagram(newDiagram.docId);
+    } catch (error) {
+      console.error('Error creating diagram:', error);
+      setError(`Error creating diagram: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Create a new flow
+  async function createNewFlow() {
+    if (!project) {
+      setError('No project loaded. Cannot create flow.');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Create the FlowDoc
+      const newFlow: FlowDoc = {
+        docId: crypto.randomUUID(),
+        docType: 'Flow',
+        title: 'Untitled Flow',
+        content: {
+          nodes: [],
+          edges: [],
+        },
+      };
+      await docFlowKit.createDocument(newFlow);
+
+      // Add reference to project
+      const newRef: DocRef = {
+        docId: newFlow.docId,
+        docType: 'Flow',
+        title: newFlow.title,
+      };
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: [...project.content.documents, newRef],
+        },
+      };
+      await saveProject(updatedProject);
+
+      setStatus('New flow created');
+      
+      // Open the new flow
+      loadFlow(newFlow.docId);
+    } catch (error) {
+      console.error('Error creating flow:', error);
+      setError(`Error creating flow: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Create a new agent
+  async function createNewAgent() {
+    if (!project) {
+      setError('No project loaded. Cannot create agent.');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Create the AgentDoc
+      const newAgent: AgentDoc = {
+        docId: crypto.randomUUID(),
+        docType: 'Agent',
+        title: 'Untitled Agent',
+        content: {
+          promptTemplate: `# Agent Prompt Template
+
+You are a helpful assistant that provides analysis for Why-Because Analysis (WBA).
+
+Please help the user with the following task:
+{input}
+
+Provide a thoughtful response that helps with their analysis.`
+        },
+      };
+      await docFlowKit.createDocument(newAgent);
+
+      // Add reference to project
+      const newRef: DocRef = {
+        docId: newAgent.docId,
+        docType: 'Agent',
+        title: newAgent.title,
+      };
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: [...project.content.documents, newRef],
+        },
+      };
+      await saveProject(updatedProject);
+
+      setStatus('New agent created');
+      
+      // Open the new agent
+      loadAgent(newAgent.docId);
+    } catch (error) {
+      console.error('Error creating agent:', error);
+      setError(`Error creating agent: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Load a diagram by ID
+  async function loadDiagram(docId: string) {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Close any active documents
+      setActiveFlowDoc(null);
+      setActiveAgentDoc(null);
+      setShowFlowRunner(false);
+      
+      const diagram = await docFlowKit.getDocument(docId) as DiagramDoc | null;
+      
+      if (!diagram) {
+        setError(`Error: Diagram with ID ${docId} not found`);
+        return;
+      }
+      
+      if (diagram.docType !== 'Diagram') {
+        setError(`Error: Document with ID ${docId} is not a Diagram`);
+        return;
+      }
+      
+      setActiveDiagramDoc(diagram);
+      setStatus(`Diagram "${diagram.title}" loaded`);
+    } catch (error) {
+      console.error('Error loading diagram:', error);
+      setError(`Error loading diagram: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Load a flow by ID
+  async function loadFlow(docId: string) {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Close any active documents
+      setActiveDiagramDoc(null);
+      setActiveAgentDoc(null);
+      setShowFlowRunner(false);
+      
+      const flow = await docFlowKit.getDocument(docId) as FlowDoc | null;
+      
+      if (!flow) {
+        setError(`Error: Flow with ID ${docId} not found`);
+        return;
+      }
+      
+      if (flow.docType !== 'Flow') {
+        setError(`Error: Document with ID ${docId} is not a Flow`);
+        return;
+      }
+      
+      setActiveFlowDoc(flow);
+      setStatus(`Flow "${flow.title}" loaded`);
+    } catch (error) {
+      console.error('Error loading flow:', error);
+      setError(`Error loading flow: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Load an agent by ID
+  async function loadAgent(docId: string) {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Close any active documents
+      setActiveDiagramDoc(null);
+      setActiveFlowDoc(null);
+      setShowFlowRunner(false);
+      
+      const agent = await docFlowKit.getDocument(docId) as AgentDoc | null;
+      
+      if (!agent) {
+        setError(`Error: Agent with ID ${docId} not found`);
+        return;
+      }
+      
+      if (agent.docType !== 'Agent') {
+        setError(`Error: Document with ID ${docId} is not an Agent`);
+        return;
+      }
+      
+      setActiveAgentDoc(agent);
+      setStatus(`Agent "${agent.title}" loaded`);
+    } catch (error) {
+      console.error('Error loading agent:', error);
+      setError(`Error loading agent: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Handle document updates
+  function handleDiagramUpdate(updatedDoc: DiagramDoc) {
+    setActiveDiagramDoc(updatedDoc);
+    
+    // Also update the reference in the project if the title changed
+    if (project && updatedDoc.title !== activeDiagramDoc?.title) {
+      const updatedDocuments = project.content.documents.map(doc => 
+        doc.docId === updatedDoc.docId 
+          ? { ...doc, title: updatedDoc.title }
+          : doc
+      );
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: updatedDocuments
+        }
+      };
+      
+      // Save the updated project
+      saveProject(updatedProject).catch(error => {
+        console.error('Error updating project with new diagram title:', error);
+      });
+    }
+  }
+
+  function handleFlowUpdate(updatedDoc: FlowDoc) {
+    setActiveFlowDoc(updatedDoc);
+    
+    // Also update the reference in the project if the title changed
+    if (project && updatedDoc.title !== activeFlowDoc?.title) {
+      const updatedDocuments = project.content.documents.map(doc => 
+        doc.docId === updatedDoc.docId 
+          ? { ...doc, title: updatedDoc.title }
+          : doc
+      );
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: updatedDocuments
+        }
+      };
+      
+      // Save the updated project
+      saveProject(updatedProject).catch(error => {
+        console.error('Error updating project with new flow title:', error);
+      });
+    }
+  }
+
+  function handleAgentUpdate(updatedDoc: AgentDoc) {
+    setActiveAgentDoc(updatedDoc);
+    
+    // Also update the reference in the project if the title changed
+    if (project && updatedDoc.title !== activeAgentDoc?.title) {
+      const updatedDocuments = project.content.documents.map(doc => 
+        doc.docId === updatedDoc.docId 
+          ? { ...doc, title: updatedDoc.title }
+          : doc
+      );
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: updatedDocuments
+        }
+      };
+      
+      // Save the updated project
+      saveProject(updatedProject).catch(error => {
+        console.error('Error updating project with new agent title:', error);
+      });
+    }
+  }
+
+  // Close active documents
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function closeActiveDiagram() {
+    setActiveDiagramDoc(null);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function closeActiveFlow() {
+    setActiveFlowDoc(null);
+    setShowFlowRunner(false);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function closeActiveAgent() {
+    setActiveAgentDoc(null);
+  }
+
+  // Initialize the app
   useEffect(() => {
-    async function initDBAndProject() {
+    async function initDB() {
       try {
         // Initialize DB if not already
-        await docFlowKit.initialize()
-        setStatus('Database initialized')
-
-        // CREATE a dummy project if it doesn't exist
-        const testProjectId = 'test-project'
-        const existing = await docFlowKit.getDocument(testProjectId)
-
-        if (!existing) {
-          await docFlowKit.createDocument({
-            docId: testProjectId,
-            docType: 'Project',
-            title: 'Sample Project',
-            content: {
-              name: 'My Test Project',
-              documents: [],
-            },
-          })
-          setStatus('Test project created')
-        } else {
-          setStatus('Test project already exists')
-        }
-        
-        // Now load it into the ProjectContext
-        await loadProject(testProjectId)
-        setStatus('Project loaded successfully')
+        await docFlowKit.initialize();
+        setStatus('Database initialized');
       } catch (err) {
-        console.error('Error initializing:', err)
-        setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
+        console.error('Error initializing:', err);
+        setError(`Error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     
-    initDBAndProject()
-  }, [loadProject])
+    initDB();
+  }, []);
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>WhyBecause Analysis App</h1>
-      
-      <div className="card" style={{ marginBottom: '2rem' }}>
-        <h2>Project Status</h2>
-        <p>{status}</p>
+  // Initialize or create a project when user is loaded
+  useEffect(() => {
+    if (!currentUser || userLoading) return;
+    
+    async function initOrCreateProject() {
+      try {
+        setIsLoading(true);
         
-        {project ? (
-          <div>
-            <h3>Current Project: {project.content.name}</h3>
-            <p>Project ID: {project.docId}</p>
-            
-            <div style={{ margin: '1rem 0' }}>
-              <input
-                type="text"
-                value={projectNameInput}
-                onChange={handleProjectNameChange}
-                placeholder="New project name"
-                style={{ padding: '0.5rem', marginRight: '0.5rem' }}
-              />
-              <button 
-                onClick={handleUpdateProjectName}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                Update Project Name
-              </button>
-            </div>
+        // If user has projects, load the first one
+        if (currentUser && currentUser.projects.length > 0) {
+          await loadProject(currentUser.projects[0]);
+          return;
+        }
+        
+        // Otherwise create a new project for the user
+        if (currentUser) {
+          const projectName = `${currentUser.displayName || currentUser.email}'s Project`;
+          const projectId = await createNewProject(projectName);
+          
+          // Update user's projects list in the database
+          // Add the project to the user's projects
+          const updatedUser = {
+            ...currentUser,
+            projects: [...currentUser.projects, projectId]
+          };
+          
+          // Update the user document in the database
+          const userDoc = {
+            docId: currentUser.userId,
+            docType: 'User',
+            title: `User: ${currentUser.email}`,
+            content: updatedUser
+          };
+          
+          await docFlowKit.updateDocument(userDoc);
+          console.log(`Created new project ${projectId} for user ${currentUser.userId}`);
+        }
+      } catch (err) {
+        console.error('Error initializing project:', err);
+        setError(`Error initializing project: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    // Only run if the user has no projects or if there's no project loaded
+    if (!project && (!currentUser.projects || currentUser.projects.length === 0)) {
+      initOrCreateProject();
+    }
+  }, [currentUser, userLoading, loadProject, createNewProject, project]);
 
-            {/* Diagrams Section */}
-            <div style={{ margin: '2rem 0' }}>
-              <h3>Project Diagrams</h3>
-              <button 
-                onClick={createNewDiagram}
-                style={{ 
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#2196F3',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  marginBottom: '1rem'
-                }}
-              >
-                + New Diagram
-              </button>
-              
-              {project.content.documents.filter(d => d.docType === 'Diagram').length === 0 ? (
-                <p>No diagrams in this project yet. Click "+ New Diagram" to create one.</p>
-              ) : (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  {project.content.documents
-                    .filter(d => d.docType === 'Diagram')
-                    .map(docRef => (
-                      <li 
-                        key={docRef.docId}
-                        style={{ 
-                          padding: '0.5rem', 
-                          border: '1px solid #ddd',
-                          marginBottom: '0.5rem',
-                          borderRadius: '4px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <span>{docRef.title || 'Untitled Diagram'}</span>
-                        <button 
-                          onClick={() => loadDiagram(docRef.docId)}
-                          style={{ 
-                            padding: '0.3rem 0.8rem',
-                            backgroundColor: '#4CAF50',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          Open
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
+  // If user is loading, show loading spinner
+  if (userLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-            {/* Flows Section */}
-            <div style={{ margin: '2rem 0' }}>
-              <h3>Project Flows</h3>
-              <button 
-                onClick={createNewFlow}
-                style={{ 
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#7B1FA2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  marginBottom: '1rem'
-                }}
-              >
-                + New Flow
-              </button>
-              
-              {project.content.documents.filter(d => d.docType === 'Flow').length === 0 ? (
-                <p>No flows in this project yet. Click "+ New Flow" to create one.</p>
-              ) : (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  {project.content.documents
-                    .filter(d => d.docType === 'Flow')
-                    .map(docRef => (
-                      <li 
-                        key={docRef.docId}
-                        style={{ 
-                          padding: '0.5rem', 
-                          border: '1px solid #ddd',
-                          marginBottom: '0.5rem',
-                          borderRadius: '4px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <span>{docRef.title || 'Untitled Flow'}</span>
-                        <button 
-                          onClick={() => loadFlow(docRef.docId)}
-                          style={{ 
-                            padding: '0.3rem 0.8rem',
-                            backgroundColor: '#7B1FA2',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          Open
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
+  // If no user is logged in, show login screen
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
 
-            {/* Agents Section */}
-            <div style={{ margin: '2rem 0' }}>
-              <h3>Project Agents</h3>
-              <button 
-                onClick={createNewAgent}
-                style={{ 
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#FF5722',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  marginBottom: '1rem'
-                }}
-              >
-                + New Agent
-              </button>
-              
-              {project.content.documents.filter(d => d.docType === 'Agent').length === 0 ? (
-                <p>No agents in this project yet. Click "+ New Agent" to create one.</p>
-              ) : (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  {project.content.documents
-                    .filter(d => d.docType === 'Agent')
-                    .map(docRef => (
-                      <li 
-                        key={docRef.docId}
-                        style={{ 
-                          padding: '0.5rem', 
-                          border: '1px solid #ddd',
-                          marginBottom: '0.5rem',
-                          borderRadius: '4px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <span>{docRef.title || 'Untitled Agent'}</span>
-                        <button 
-                          onClick={() => loadAgent(docRef.docId)}
-                          style={{ 
-                            padding: '0.3rem 0.8rem',
-                            backgroundColor: '#FF5722',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          Open
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
+  // Get the title for the active document
+  const getActiveTitle = () => {
+    if (activeDiagramDoc) return `Diagram: ${activeDiagramDoc.title}`;
+    if (activeFlowDoc) {
+      return showFlowRunner ? `Running Flow: ${activeFlowDoc.title}` : `Flow: ${activeFlowDoc.title}`;
+    }
+    if (activeAgentDoc) return `Agent: ${activeAgentDoc.title}`;
+    return 'Project Dashboard';
+  };
 
-            {/* LLM Settings Section */}
-            <div style={{ margin: '2rem 0', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}>
-              <h3>LLM Settings</h3>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    Provider:
-                    <select 
-                      value={project.content.llmSettings?.provider || DEFAULT_LLM_SETTINGS.provider}
-                      onChange={(e) => updateLLMSettings({ provider: e.target.value })}
-                      style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
-                    >
-                      <option value="dummy">Dummy (Simulation)</option>
-                      <option value="ollama">Ollama (Local)</option>
-                      <option value="azureOpenAI">Azure OpenAI</option>
-                    </select>
-                  </label>
-                </div>
-                
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    Model:
-                    <input 
-                      type="text"
-                      value={project.content.llmSettings?.model || DEFAULT_LLM_SETTINGS.model}
-                      onChange={(e) => updateLLMSettings({ model: e.target.value })}
-                      placeholder="Model name"
-                      style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
-                    />
-                  </label>
-                </div>
-                
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    Temperature:
-                    <input 
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={project.content.llmSettings?.temperature || DEFAULT_LLM_SETTINGS.temperature}
-                      onChange={(e) => updateLLMSettings({ temperature: parseFloat(e.target.value) })}
-                      style={{ padding: '0.3rem', marginLeft: '0.5rem', width: '60px' }}
-                    />
-                  </label>
-                </div>
-                
-                {project.content.llmSettings?.provider === 'azureOpenAI' && (
-                  <>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                        API Key:
-                        <input 
-                          type="password"
-                          value={project.content.llmSettings?.apiKey || ''}
-                          onChange={(e) => updateLLMSettings({ apiKey: e.target.value })}
-                          placeholder="API Key"
-                          style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
-                        />
-                      </label>
-                    </div>
-                    
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                        API Endpoint:
-                        <input 
-                          type="text"
-                          value={project.content.llmSettings?.apiEndpoint || ''}
-                          onChange={(e) => updateLLMSettings({ apiEndpoint: e.target.value })}
-                          placeholder="https://your-resource.openai.azure.com"
-                          style={{ padding: '0.3rem', marginLeft: '0.5rem', width: '300px' }}
-                        />
-                      </label>
-                    </div>
-                  </>
-                )}
-                
-                {project.content.llmSettings?.provider === 'ollama' && (
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                      Endpoint:
-                      <input 
-                        type="text"
-                        value={project.content.llmSettings?.apiEndpoint || 'http://localhost:11434'}
-                        onChange={(e) => updateLLMSettings({ apiEndpoint: e.target.value })}
-                        placeholder="http://localhost:11434"
-                        style={{ padding: '0.3rem', marginLeft: '0.5rem', width: '200px' }}
-                      />
-                    </label>
-                  </div>
-                )}
-              </div>
-              <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '0.5rem' }}>
-                These settings will be used when running agents in flows. The "dummy" provider simulates LLM responses for testing.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p>No project loaded.</p>
-            <div style={{ margin: '1rem 0' }}>
-              <input
-                type="text"
-                value={projectNameInput}
-                onChange={handleProjectNameChange}
-                placeholder="New project name"
-                style={{ padding: '0.5rem', marginRight: '0.5rem' }}
-              />
-              <button 
-                onClick={handleCreateProject}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                Create New Project
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Diagram Editor Section */}
-      {activeDiagramDoc && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3>Editing Diagram: {activeDiagramDoc.title}</h3>
-            <button 
-              onClick={closeActiveDiagram}
-              style={{ 
-                padding: '0.3rem 0.8rem',
-                backgroundColor: '#607D8B', 
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px'
-              }}
-            >
-              Close Diagram
-            </button>
-          </div>
+  // Render content based on active state
+  const renderContent = () => {
+    // Show loading state
+    if (isLoading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+    
+    // Show error message if any
+    if (error) {
+      return (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      );
+    }
+    
+    // Show status message if any
+    const statusMessage = status ? (
+      <Alert severity="info" sx={{ mb: 3 }} onClose={() => setStatus('')}>
+        {status}
+      </Alert>
+    ) : null;
+    
+    // Show diagram editor
+    if (activeDiagramDoc) {
+      return (
+        <>
+          {statusMessage}
           <DiagramManager
             diagramDoc={activeDiagramDoc}
             onUpdate={handleDiagramUpdate}
           />
-        </div>
-      )}
-
-      {/* Flow Editor Section */}
-      {activeFlowDoc && project && !showFlowRunner && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3>Editing Flow: {activeFlowDoc.title}</h3>
-            <div>
-              <button 
-                onClick={() => setShowFlowRunner(true)}
-                style={{ 
-                  padding: '0.3rem 0.8rem',
-                  backgroundColor: '#7B1FA2', 
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  marginRight: '0.5rem'
-                }}
-              >
-                Run This Flow
-              </button>
-              <button 
-                onClick={closeActiveFlow}
-                style={{ 
-                  padding: '0.3rem 0.8rem',
-                  backgroundColor: '#607D8B', 
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px'
-                }}
-              >
-                Close Flow
-              </button>
-            </div>
-          </div>
+        </>
+      );
+    }
+    
+    // Show flow editor or runner
+    if (activeFlowDoc && project) {
+      if (showFlowRunner) {
+        return (
+          <>
+            {statusMessage}
+            <FlowRunnerUI 
+              flowDoc={activeFlowDoc}
+              project={project} 
+              onClose={() => setShowFlowRunner(false)}
+            />
+          </>
+        );
+      }
+      
+      return (
+        <>
+          {statusMessage}
+          <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+            <Typography variant="h5">Editing Flow: {activeFlowDoc.title}</Typography>
+          </Stack>
           <FlowManager
             flowDoc={activeFlowDoc}
             onUpdate={handleFlowUpdate}
             project={project}
           />
-        </div>
-      )}
-
-      {/* Flow Runner Section */}
-      {activeFlowDoc && project && showFlowRunner && (
-        <FlowRunnerUI 
-          flowDoc={activeFlowDoc}
-          project={project} 
-          onClose={() => setShowFlowRunner(false)}
-        />
-      )}
-
-      {/* Agent Editor Section */}
-      {activeAgentDoc && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3>Editing Agent: {activeAgentDoc.title}</h3>
-            <button 
-              onClick={closeActiveAgent}
-              style={{ 
-                padding: '0.3rem 0.8rem',
-                backgroundColor: '#607D8B', 
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px'
-              }}
-            >
-              Close Agent
-            </button>
-          </div>
+        </>
+      );
+    }
+    
+    // Show agent editor
+    if (activeAgentDoc) {
+      return (
+        <>
+          {statusMessage}
+          <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+            <Typography variant="h5">Editing Agent: {activeAgentDoc.title}</Typography>
+          </Stack>
           <AgentManager
             agentDoc={activeAgentDoc}
             onUpdate={handleAgentUpdate}
           />
-        </div>
-      )}
-    </>
-  )
+        </>
+      );
+    }
+    
+    // Show project dashboard
+    return (
+      <>
+        {statusMessage}
+        <ProjectDashboard 
+          onOpenDiagram={loadDiagram}
+          onOpenFlow={loadFlow}
+          onOpenAgent={loadAgent}
+          onCreateDiagram={createNewDiagram}
+          onCreateFlow={createNewFlow}
+          onCreateAgent={createNewAgent}
+        />
+      </>
+    );
+  };
+
+  return (
+    <AppLayout title={getActiveTitle()}>
+      {renderContent()}
+    </AppLayout>
+  );
 }
 
 export default App

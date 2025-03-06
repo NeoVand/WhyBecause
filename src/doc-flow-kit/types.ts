@@ -124,4 +124,27 @@ export interface AgentDoc extends BaseDocument {
     // Optionally we can store more, e.g. parse script or metadata
     // parseScript?: string
   }
+}
+
+/**
+ * User model for multi-user support
+ */
+export interface User {
+  userId: string
+  email: string
+  displayName?: string
+  passwordHash?: string // For local auth (not secure for production)
+  projects: string[]    // List of project IDs the user has access to
+  preferences?: {
+    darkMode?: boolean
+    defaultLLMSettings?: LLMSettings
+  }
+}
+
+/**
+ * User document stored in the database
+ */
+export interface UserDoc extends BaseDocument {
+  docType: 'User'
+  content: User
 } 
