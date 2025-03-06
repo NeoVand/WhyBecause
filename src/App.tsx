@@ -1,48 +1,96 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState, ChangeEvent } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
-import { docFlowKit } from './doc-flow-kit'
+import { docFlowKit, useProject } from './doc-flow-kit'
 
 function App() {
-  const [count, setCount] = useState(0)
-  const [dbStatus, setDbStatus] = useState<string>('Initializing...')
-  const [loadedDoc, setLoadedDoc] = useState<string>('None')
-
-  useEffect(() => {
-    async function testDB() {
-      try {
-        // Initialize the database
-        setDbStatus('Initializing IndexedDB...')
-        await docFlowKit.initialize()
-        setDbStatus('IndexedDB initialized')
-        
-        // Create a test document
-        const testDoc = {
-          docId: 'test-doc',
-          docType: 'Test',
-          title: 'My Test Document',
-          content: { hello: 'world' },
-        }
-        
-        await docFlowKit.createDocument(testDoc)
-        setDbStatus('Test document created')
-        
-        // Retrieve the document
-        const loaded = await docFlowKit.getDocument('test-doc')
-        console.log('Loaded doc from IDB:', loaded)
-        
-        if (loaded) {
-          setLoadedDoc(JSON.stringify(loaded, null, 2))
-        }
-      } catch (error) {
-        console.error('Error testing IndexedDB:', error)
-        setDbStatus(`Error: ${error instanceof Error ? error.message : String(error)}`)
+  const { project, loadProject, saveProject, createNewProject } = useProject()
+  const [status, setStatus] = useState<string>('Initializing...')
+  const [projectNameInput, setProjectNameInput] = useState<string>('')
+  
+  // Handle project name input change
+  const handleProjectNameChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setProjectNameInput(e.target.value)
+  }
+  
+  // Handle updating the project name
+  const handleUpdateProjectName = async () => {
+    if (!project || !projectNameInput) return
+    
+    // Create a copy of the project with updated name
+    const updatedProject = {
+      ...project,
+      title: projectNameInput,
+      content: {
+        ...project.content,
+        name: projectNameInput
       }
     }
     
-    testDB()
-  }, [])
+    try {
+      await saveProject(updatedProject)
+      setStatus('Project updated successfully')
+    } catch (error) {
+      console.error('Error updating project:', error)
+      setStatus(`Error updating project: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  
+  // Handle creating a new project
+  const handleCreateProject = async () => {
+    if (!projectNameInput) {
+      setStatus('Please enter a project name')
+      return
+    }
+    
+    try {
+      const newProjectId = await createNewProject(projectNameInput)
+      setStatus(`New project created with ID: ${newProjectId}`)
+      setProjectNameInput('')
+    } catch (error) {
+      console.error('Error creating project:', error)
+      setStatus(`Error creating project: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  useEffect(() => {
+    async function initDBAndProject() {
+      try {
+        // Initialize DB if not already
+        await docFlowKit.initialize()
+        setStatus('Database initialized')
+
+        // CREATE a dummy project if it doesn't exist
+        const testProjectId = 'test-project'
+        const existing = await docFlowKit.getDocument(testProjectId)
+
+        if (!existing) {
+          await docFlowKit.createDocument({
+            docId: testProjectId,
+            docType: 'Project',
+            title: 'Sample Project',
+            content: {
+              name: 'My Test Project',
+              documents: [],
+            },
+          })
+          setStatus('Test project created')
+        } else {
+          setStatus('Test project already exists')
+        }
+        
+        // Now load it into the ProjectContext
+        await loadProject(testProjectId)
+        setStatus('Project loaded successfully')
+      } catch (err) {
+        console.error('Error initializing:', err)
+        setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    
+    initDBAndProject()
+  }, [loadProject])
 
   return (
     <>
@@ -56,26 +104,52 @@ function App() {
       </div>
       <h1>WhyBecause Analysis App</h1>
       
-      <div className="card">
-        <h2>IndexedDB Test</h2>
-        <p>Status: {dbStatus}</p>
-        <h3>Loaded Document:</h3>
-        <pre style={{ textAlign: 'left', maxWidth: '400px', margin: '0 auto' }}>
-          {loadedDoc}
-        </pre>
+      <div className="card" style={{ marginBottom: '2rem' }}>
+        <h2>Project Status</h2>
+        <p>{status}</p>
+        
+        {project ? (
+          <div>
+            <h3>Current Project: {project.content.name}</h3>
+            <p>Project ID: {project.docId}</p>
+            
+            <div style={{ margin: '1rem 0' }}>
+              <input
+                type="text"
+                value={projectNameInput}
+                onChange={handleProjectNameChange}
+                placeholder="New project name"
+                style={{ padding: '0.5rem', marginRight: '0.5rem' }}
+              />
+              <button 
+                onClick={handleUpdateProjectName}
+                style={{ padding: '0.5rem 1rem' }}
+              >
+                Update Project Name
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p>No project loaded.</p>
+            <div style={{ margin: '1rem 0' }}>
+              <input
+                type="text"
+                value={projectNameInput}
+                onChange={handleProjectNameChange}
+                placeholder="New project name"
+                style={{ padding: '0.5rem', marginRight: '0.5rem' }}
+              />
+              <button 
+                onClick={handleCreateProject}
+                style={{ padding: '0.5rem 1rem' }}
+              >
+                Create New Project
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-      
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </>
   )
 }
