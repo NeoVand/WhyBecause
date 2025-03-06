@@ -12,8 +12,10 @@ import {
   DiagramManager,
   FlowManager,
   AgentManager,
-  FlowRunnerUI
+  FlowRunnerUI,
+  DEFAULT_LLM_SETTINGS
 } from './doc-flow-kit'
+import { LLMSettings } from './doc-flow-kit/LLMService'
 
 function App() {
   const { project, loadProject, saveProject, createNewProject } = useProject()
@@ -381,6 +383,36 @@ Provide a thoughtful response that helps with their analysis.`
     setActiveAgentDoc(null)
   }
 
+  // Add a function to update the project's LLM settings
+  async function updateLLMSettings(partialSettings: Partial<LLMSettings>) {
+    if (!project) return;
+    
+    try {
+      // Get the current settings or use defaults
+      const currentSettings = project.content.llmSettings || DEFAULT_LLM_SETTINGS;
+      
+      // Create updated settings by merging current and new
+      const newSettings: LLMSettings = {
+        ...currentSettings,
+        ...partialSettings
+      };
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          llmSettings: newSettings
+        }
+      };
+      
+      await saveProject(updatedProject);
+      setStatus('LLM settings updated');
+    } catch (error) {
+      console.error('Error updating LLM settings:', error);
+      setStatus(`Error updating LLM settings: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   useEffect(() => {
     async function initDBAndProject() {
       try {
@@ -620,6 +652,103 @@ Provide a thoughtful response that helps with their analysis.`
                 </ul>
               )}
             </div>
+
+            {/* LLM Settings Section */}
+            <div style={{ margin: '2rem 0', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}>
+              <h3>LLM Settings</h3>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                    Provider:
+                    <select 
+                      value={project.content.llmSettings?.provider || DEFAULT_LLM_SETTINGS.provider}
+                      onChange={(e) => updateLLMSettings({ provider: e.target.value })}
+                      style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
+                    >
+                      <option value="dummy">Dummy (Simulation)</option>
+                      <option value="ollama">Ollama (Local)</option>
+                      <option value="azureOpenAI">Azure OpenAI</option>
+                    </select>
+                  </label>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                    Model:
+                    <input 
+                      type="text"
+                      value={project.content.llmSettings?.model || DEFAULT_LLM_SETTINGS.model}
+                      onChange={(e) => updateLLMSettings({ model: e.target.value })}
+                      placeholder="Model name"
+                      style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
+                    />
+                  </label>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                    Temperature:
+                    <input 
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={project.content.llmSettings?.temperature || DEFAULT_LLM_SETTINGS.temperature}
+                      onChange={(e) => updateLLMSettings({ temperature: parseFloat(e.target.value) })}
+                      style={{ padding: '0.3rem', marginLeft: '0.5rem', width: '60px' }}
+                    />
+                  </label>
+                </div>
+                
+                {project.content.llmSettings?.provider === 'azureOpenAI' && (
+                  <>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        API Key:
+                        <input 
+                          type="password"
+                          value={project.content.llmSettings?.apiKey || ''}
+                          onChange={(e) => updateLLMSettings({ apiKey: e.target.value })}
+                          placeholder="API Key"
+                          style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
+                        />
+                      </label>
+                    </div>
+                    
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                        API Endpoint:
+                        <input 
+                          type="text"
+                          value={project.content.llmSettings?.apiEndpoint || ''}
+                          onChange={(e) => updateLLMSettings({ apiEndpoint: e.target.value })}
+                          placeholder="https://your-resource.openai.azure.com"
+                          style={{ padding: '0.3rem', marginLeft: '0.5rem', width: '300px' }}
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
+                
+                {project.content.llmSettings?.provider === 'ollama' && (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                      Endpoint:
+                      <input 
+                        type="text"
+                        value={project.content.llmSettings?.apiEndpoint || 'http://localhost:11434'}
+                        onChange={(e) => updateLLMSettings({ apiEndpoint: e.target.value })}
+                        placeholder="http://localhost:11434"
+                        style={{ padding: '0.3rem', marginLeft: '0.5rem', width: '200px' }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+              <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '0.5rem' }}>
+                These settings will be used when running agents in flows. The "dummy" provider simulates LLM responses for testing.
+              </p>
+            </div>
           </div>
         ) : (
           <div>
@@ -712,7 +841,8 @@ Provide a thoughtful response that helps with their analysis.`
       {/* Flow Runner Section */}
       {activeFlowDoc && project && showFlowRunner && (
         <FlowRunnerUI 
-          flowDoc={activeFlowDoc} 
+          flowDoc={activeFlowDoc}
+          project={project} 
           onClose={() => setShowFlowRunner(false)}
         />
       )}

@@ -1,5 +1,6 @@
-import { FlowDoc, FlowStateNode, FlowTransitionEdge, AgentDoc } from './types'
+import { FlowDoc, FlowStateNode, FlowTransitionEdge, AgentDoc, ProjectDoc } from './types'
 import { docFlowKit } from './DocFlowKit'
+import { getLLMService, LLMSettings, DEFAULT_LLM_SETTINGS } from './LLMService'
 
 /**
  * Class for executing a flow, running agents, and managing state transitions
@@ -7,9 +8,11 @@ import { docFlowKit } from './DocFlowKit'
 export class FlowRunner {
   private flow: FlowDoc
   private currentStateId: string | null = null
+  private project: ProjectDoc
   
-  constructor(flowDoc: FlowDoc) {
+  constructor(flowDoc: FlowDoc, project: ProjectDoc) {
     this.flow = flowDoc
+    this.project = project
   }
   
   /**
@@ -68,20 +71,46 @@ export class FlowRunner {
         return `Error: Document with id=${state.agentId} is not an Agent.`
       }
       
-      // For now, just simulate running the agent
-      const prompt = agentDoc.content.promptTemplate
+      // Get the prompt template from the agent
+      const promptTemplate = agentDoc.content.promptTemplate;
       
-      // In a future step, we'll actually call an LLM service
-      return `[Simulated Agent Run]
-State: ${state.label} (${state.type})
-Agent: ${agentDoc.title}
----
-${prompt}
----
-[Simulated LLM Response]: The agent has processed the prompt and returned a result.`
+      // Process the prompt template (replace variables, etc.)
+      const processedPrompt = this.processPromptTemplate(promptTemplate, {
+        stateName: state.label,
+        stateType: state.type,
+        flowName: this.flow.title
+      });
+      
+      // Get LLM settings from the project, or use defaults
+      const llmSettings = this.project.content.llmSettings || DEFAULT_LLM_SETTINGS;
+      
+      // Get the appropriate LLM service and call it
+      const llmService = getLLMService(llmSettings);
+      const response = await llmService.callLLM(processedPrompt, llmSettings);
+      
+      return `[Agent: ${agentDoc.title}]\n\nPrompt:\n${processedPrompt}\n\nResponse:\n${response}`;
     } catch (error) {
       return `Error running agent: ${error instanceof Error ? error.message : String(error)}`
     }
+  }
+  
+  /**
+   * Process a prompt template by replacing variables with their values
+   */
+  private processPromptTemplate(template: string, variables: Record<string, string>): string {
+    let processed = template;
+    
+    // Replace {varName} with the corresponding value
+    Object.entries(variables).forEach(([key, value]) => {
+      processed = processed.replace(new RegExp(`{${key}}`, 'g'), value);
+    });
+    
+    // Replace {input} with a default value if not provided
+    if (processed.includes('{input}')) {
+      processed = processed.replace(/{input}/g, 'Please analyze this flow state and provide insights.');
+    }
+    
+    return processed;
   }
   
   /**

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react'
-import { FlowDoc, FlowStateNode, FlowTransitionEdge } from './types'
+import { FlowDoc, FlowStateNode, FlowTransitionEdge, ProjectDoc } from './types'
 import { FlowRunner } from './FlowRunner'
 
 interface FlowRunnerUIProps {
   flowDoc: FlowDoc
+  project: ProjectDoc
   onClose?: () => void
 }
 
 /**
  * Component for visualizing and controlling the execution of a flow
  */
-export function FlowRunnerUI({ flowDoc, onClose }: FlowRunnerUIProps) {
-  const [runner] = useState(() => new FlowRunner(flowDoc))
+export function FlowRunnerUI({ flowDoc, project, onClose }: FlowRunnerUIProps) {
+  const [runner] = useState(() => new FlowRunner(flowDoc, project))
   const [currentStateId, setCurrentStateId] = useState<string | null>(null)
   const [logs, setLogs] = useState<string[]>([`Flow "${flowDoc.title}" loaded and ready to run.`])
   const [isRunning, setIsRunning] = useState(false)

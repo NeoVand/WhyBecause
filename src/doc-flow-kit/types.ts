@@ -1,3 +1,5 @@
+import { LLMSettings } from './LLMService';
+
 /**
  * Base interface for any document stored in our local database.
  * We'll expand this in future steps.
@@ -76,6 +78,7 @@ export interface ProjectDoc extends BaseDocument {
   content: {
     name: string
     documents: DocRef[]
+    llmSettings?: LLMSettings
     // We'll add more fields as we proceed
   }
 }
