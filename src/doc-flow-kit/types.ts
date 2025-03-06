@@ -37,6 +37,22 @@ export interface GraphEdge {
 }
 
 /**
+ * Content structure for node-based diagrams
+ */
+export interface NodeBasedContent {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
+
+/**
+ * A specialized doc for node-based diagrams
+ */
+export interface DiagramDoc extends BaseDocument {
+  docType: 'Diagram'
+  content: NodeBasedContent
+}
+
+/**
  * Example specialized doc for a Project.
  * This is intentionally minimal for now.
  */
