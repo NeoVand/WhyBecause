@@ -2,13 +2,22 @@ import { useEffect, useState, ChangeEvent } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
-import { docFlowKit, useProject, DiagramDoc, DocRef, DiagramManager } from './doc-flow-kit'
+import { 
+  docFlowKit, 
+  useProject, 
+  DiagramDoc, 
+  FlowDoc,
+  DocRef, 
+  DiagramManager,
+  FlowManager
+} from './doc-flow-kit'
 
 function App() {
   const { project, loadProject, saveProject, createNewProject } = useProject()
   const [status, setStatus] = useState<string>('Initializing...')
   const [projectNameInput, setProjectNameInput] = useState<string>('')
   const [activeDiagramDoc, setActiveDiagramDoc] = useState<DiagramDoc | null>(null)
+  const [activeFlowDoc, setActiveFlowDoc] = useState<FlowDoc | null>(null)
   
   // Handle project name input change
   const handleProjectNameChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -98,9 +107,55 @@ function App() {
     }
   }
 
+  // Create a new flow and add it to the current project
+  async function createNewFlow() {
+    if (!project) {
+      setStatus('No project loaded. Cannot create flow.')
+      return
+    }
+    
+    try {
+      // 1) Create the FlowDoc
+      const newFlow: FlowDoc = {
+        docId: crypto.randomUUID(),
+        docType: 'Flow',
+        title: 'Untitled Flow',
+        content: {
+          nodes: [],
+          edges: [],
+        },
+      }
+      await docFlowKit.createDocument(newFlow)
+
+      // 2) Add reference to project
+      const newRef: DocRef = {
+        docId: newFlow.docId,
+        docType: 'Flow',
+        title: newFlow.title,
+      }
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: [...project.content.documents, newRef],
+        },
+      }
+      await saveProject(updatedProject)
+
+      setStatus('New Flow Created & Linked!')
+    } catch (error) {
+      console.error('Error creating flow:', error)
+      setStatus(`Error creating flow: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   // Load a diagram by ID
   async function loadDiagram(docId: string) {
     try {
+      // Close any active flow first
+      setActiveFlowDoc(null);
+      
       const diagram = await docFlowKit.getDocument(docId) as DiagramDoc | null
       
       if (!diagram) {
@@ -118,6 +173,32 @@ function App() {
     } catch (error) {
       console.error('Error loading diagram:', error)
       setStatus(`Error loading diagram: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  // Load a flow by ID
+  async function loadFlow(docId: string) {
+    try {
+      // Close any active diagram first
+      setActiveDiagramDoc(null);
+      
+      const flow = await docFlowKit.getDocument(docId) as FlowDoc | null
+      
+      if (!flow) {
+        setStatus(`Error: Flow with ID ${docId} not found`)
+        return
+      }
+      
+      if (flow.docType !== 'Flow') {
+        setStatus(`Error: Document with ID ${docId} is not a Flow`)
+        return
+      }
+      
+      setActiveFlowDoc(flow)
+      setStatus(`Flow "${flow.title}" loaded`)
+    } catch (error) {
+      console.error('Error loading flow:', error)
+      setStatus(`Error loading flow: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -148,9 +229,41 @@ function App() {
     }
   }
 
+  // Handle flow updates
+  function handleFlowUpdate(updatedDoc: FlowDoc) {
+    setActiveFlowDoc(updatedDoc)
+    
+    // Also update the reference in the project if the title changed
+    if (project && updatedDoc.title !== activeFlowDoc?.title) {
+      const updatedDocuments = project.content.documents.map(doc => 
+        doc.docId === updatedDoc.docId 
+          ? { ...doc, title: updatedDoc.title }
+          : doc
+      )
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: updatedDocuments
+        }
+      }
+      
+      // Save the updated project
+      saveProject(updatedProject).catch(error => {
+        console.error('Error updating project with new flow title:', error)
+      })
+    }
+  }
+
   // Close the active diagram
   function closeActiveDiagram() {
     setActiveDiagramDoc(null)
+  }
+
+  // Close the active flow
+  function closeActiveFlow() {
+    setActiveFlowDoc(null)
   }
 
   useEffect(() => {
@@ -228,6 +341,7 @@ function App() {
               </button>
             </div>
 
+            {/* Diagrams Section */}
             <div style={{ margin: '2rem 0' }}>
               <h3>Project Diagrams</h3>
               <button 
@@ -281,6 +395,61 @@ function App() {
                 </ul>
               )}
             </div>
+
+            {/* Flows Section */}
+            <div style={{ margin: '2rem 0' }}>
+              <h3>Project Flows</h3>
+              <button 
+                onClick={createNewFlow}
+                style={{ 
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#7B1FA2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  marginBottom: '1rem'
+                }}
+              >
+                + New Flow
+              </button>
+              
+              {project.content.documents.filter(d => d.docType === 'Flow').length === 0 ? (
+                <p>No flows in this project yet. Click "+ New Flow" to create one.</p>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {project.content.documents
+                    .filter(d => d.docType === 'Flow')
+                    .map(docRef => (
+                      <li 
+                        key={docRef.docId}
+                        style={{ 
+                          padding: '0.5rem', 
+                          border: '1px solid #ddd',
+                          marginBottom: '0.5rem',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span>{docRef.title || 'Untitled Flow'}</span>
+                        <button 
+                          onClick={() => loadFlow(docRef.docId)}
+                          style={{ 
+                            padding: '0.3rem 0.8rem',
+                            backgroundColor: '#7B1FA2',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          Open
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
           </div>
         ) : (
           <div>
@@ -304,6 +473,7 @@ function App() {
         )}
       </div>
 
+      {/* Diagram Editor Section */}
       {activeDiagramDoc && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -324,6 +494,31 @@ function App() {
           <DiagramManager
             diagramDoc={activeDiagramDoc}
             onUpdate={handleDiagramUpdate}
+          />
+        </div>
+      )}
+
+      {/* Flow Editor Section */}
+      {activeFlowDoc && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3>Editing Flow: {activeFlowDoc.title}</h3>
+            <button 
+              onClick={closeActiveFlow}
+              style={{ 
+                padding: '0.3rem 0.8rem',
+                backgroundColor: '#607D8B', 
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px'
+              }}
+            >
+              Close Flow
+            </button>
+          </div>
+          <FlowManager
+            flowDoc={activeFlowDoc}
+            onUpdate={handleFlowUpdate}
           />
         </div>
       )}

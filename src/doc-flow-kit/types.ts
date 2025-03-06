@@ -78,4 +78,31 @@ export interface ProjectDoc extends BaseDocument {
     documents: DocRef[]
     // We'll add more fields as we proceed
   }
+}
+
+/**
+ * Specialized node for flow state machines
+ */
+export interface FlowStateNode extends GraphNode {
+  // For now, we'll just store a "name" in `label`,
+  // but we can add "agentId?" or "onEnterScript?" in the future.
+}
+
+/**
+ * Specialized edge for flow state transitions
+ */
+export interface FlowTransitionEdge extends GraphEdge {
+  // A "condition" or "trigger" might go here.
+  // For now, we leave it with the base fields.
+}
+
+/**
+ * FlowDoc representing a state machine
+ */
+export interface FlowDoc extends BaseDocument {
+  docType: 'Flow'
+  content: {
+    nodes: FlowStateNode[]
+    edges: FlowTransitionEdge[]
+  }
 } 
