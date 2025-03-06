@@ -667,7 +667,7 @@ Provide a thoughtful response that helps with their analysis.`
       )}
 
       {/* Flow Editor Section */}
-      {activeFlowDoc && (
+      {activeFlowDoc && project && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3>Editing Flow: {activeFlowDoc.title}</h3>
@@ -687,6 +687,7 @@ Provide a thoughtful response that helps with their analysis.`
           <FlowManager
             flowDoc={activeFlowDoc}
             onUpdate={handleFlowUpdate}
+            project={project}
           />
         </div>
       )}

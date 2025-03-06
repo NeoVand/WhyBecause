@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { FlowDoc, FlowStateNode, FlowTransitionEdge } from './types'
+import React, { useState, useEffect } from 'react'
+import { FlowDoc, FlowStateNode, FlowTransitionEdge, DocRef, ProjectDoc } from './types'
 import { docFlowKit } from './DocFlowKit'
 
 interface FlowManagerProps {
   flowDoc: FlowDoc
   onUpdate?: (updatedDoc: FlowDoc) => void
+  project: ProjectDoc // We need the project to access available agents
 }
 
 /**
@@ -20,16 +21,25 @@ const FLOW_STATE_TYPES: FlowStateType[] = ['Start', 'Normal', 'Decision', 'Final
 /**
  * Component for editing a flow state machine
  */
-export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
+export function FlowManager({ flowDoc, onUpdate, project }: FlowManagerProps) {
   const [title, setTitle] = useState(flowDoc.title)
   const [states, setStates] = useState<FlowStateNode[]>(flowDoc.content.nodes)
   const [transitions, setTransitions] = useState<FlowTransitionEdge[]>(flowDoc.content.edges)
   const [defaultStateType, setDefaultStateType] = useState<string>('Normal')
+  const [agentRefs, setAgentRefs] = useState<DocRef[]>([])
 
   // For adding transitions
   const [sourceId, setSourceId] = useState('')
   const [targetId, setTargetId] = useState('')
   const [transitionLabel, setTransitionLabel] = useState('')
+
+  // Get available agents from the project
+  useEffect(() => {
+    if (project) {
+      const availableAgents = project.content.documents.filter(d => d.docType === 'Agent')
+      setAgentRefs(availableAgents)
+    }
+  }, [project])
 
   /**
    * Save flow changes to IndexedDB
@@ -86,6 +96,15 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
   }
 
   /**
+   * Update a state's agent reference
+   */
+  function updateStateAgent(stateId: string, agentId: string | undefined) {
+    setStates((prev) =>
+      prev.map((s) => (s.id === stateId ? { ...s, agentId } : s))
+    )
+  }
+
+  /**
    * Remove a state from the flow
    */
   function removeState(stateId: string) {
@@ -129,6 +148,15 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
    */
   function removeTransition(transitionId: string) {
     setTransitions((prev) => prev.filter((t) => t.id !== transitionId))
+  }
+
+  /**
+   * Get agent name by ID
+   */
+  function getAgentName(agentId: string | undefined): string {
+    if (!agentId) return 'No Agent'
+    const agent = agentRefs.find(a => a.docId === agentId)
+    return agent ? agent.title || 'Unnamed Agent' : 'Unknown Agent'
   }
 
   return (
@@ -187,8 +215,8 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
       ) : (
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {states.map((state) => (
-            <li key={state.id} style={{ marginBottom: '0.5rem' }}>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <li key={state.id} style={{ marginBottom: '1rem', border: '1px solid #eee', padding: '0.5rem', borderRadius: '4px' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
                 {/* State Type Dropdown */}
                 <select
                   value={state.type}
@@ -217,6 +245,39 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
                   Remove
                 </button>
               </div>
+              
+              {/* Agent Selection */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center' }}>
+                  Agent:
+                  <select
+                    value={state.agentId || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      updateStateAgent(state.id, val === '' ? undefined : val);
+                    }}
+                    style={{ padding: '0.3rem', marginLeft: '0.5rem', minWidth: '200px' }}
+                  >
+                    <option value="">No Agent</option>
+                    {agentRefs.map((ref) => (
+                      <option key={ref.docId} value={ref.docId}>
+                        {ref.title || 'Unnamed Agent'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {state.agentId && (
+                  <span style={{ 
+                    backgroundColor: '#FF5722', 
+                    color: 'white',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '4px',
+                    fontSize: '0.8rem'
+                  }}>
+                    Uses Agent: {getAgentName(state.agentId)}
+                  </span>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -237,7 +298,7 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
           <option value="">Select Source State</option>
           {states.map((state) => (
             <option key={state.id} value={state.id}>
-              {state.label} ({state.type})
+              {state.label} ({state.type}) {state.agentId ? '🤖' : ''}
             </option>
           ))}
         </select>
@@ -250,7 +311,7 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
           <option value="">Select Target State</option>
           {states.map((state) => (
             <option key={state.id} value={state.id}>
-              {state.label} ({state.type})
+              {state.label} ({state.type}) {state.agentId ? '🤖' : ''}
             </option>
           ))}
         </select>
@@ -275,8 +336,10 @@ export function FlowManager({ flowDoc, onUpdate }: FlowManagerProps) {
           {transitions.map((transition) => (
             <li key={transition.id} style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
               <span style={{ marginRight: '0.5rem' }}>
-                {states.find((s) => s.id === transition.source)?.label ?? transition.source} ({states.find((s) => s.id === transition.source)?.type}) →{' '}
+                {states.find((s) => s.id === transition.source)?.label ?? transition.source} ({states.find((s) => s.id === transition.source)?.type}) 
+                {states.find((s) => s.id === transition.source)?.agentId ? ' 🤖' : ''} →{' '}
                 {states.find((s) => s.id === transition.target)?.label ?? transition.target} ({states.find((s) => s.id === transition.target)?.type})
+                {states.find((s) => s.id === transition.target)?.agentId ? ' 🤖' : ''}
                 {transition.properties?.label ? `: ${transition.properties.label}` : ''}
               </span>
               <button

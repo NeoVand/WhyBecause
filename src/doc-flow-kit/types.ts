@@ -84,8 +84,9 @@ export interface ProjectDoc extends BaseDocument {
  * Specialized node for flow state machines
  */
 export interface FlowStateNode extends GraphNode {
-  // For now, we'll just store a "name" in `label`,
-  // but we can add "agentId?" or "onEnterScript?" in the future.
+  // For now, we store a "name" in `label`,
+  // The agentId can reference an AgentDoc to invoke when this state is active
+  agentId?: string;
 }
 
 /**
