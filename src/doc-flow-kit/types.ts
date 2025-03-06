@@ -105,4 +105,19 @@ export interface FlowDoc extends BaseDocument {
     nodes: FlowStateNode[]
     edges: FlowTransitionEdge[]
   }
+}
+
+/**
+ * Minimal doc structure for an "Agent"
+ * that holds prompt templates or parsing logic, etc.
+ */
+export interface AgentDoc extends BaseDocument {
+  docType: 'Agent'
+  content: {
+    // For now, we store a single "prompt" string, but can expand this later
+    promptTemplate: string
+
+    // Optionally we can store more, e.g. parse script or metadata
+    // parseScript?: string
+  }
 } 

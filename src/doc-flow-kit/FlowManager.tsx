@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { FlowDoc, FlowStateNode, FlowTransitionEdge } from './types'
 import { docFlowKit } from './DocFlowKit'
 

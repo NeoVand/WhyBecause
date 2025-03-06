@@ -7,9 +7,11 @@ import {
   useProject, 
   DiagramDoc, 
   FlowDoc,
+  AgentDoc,
   DocRef, 
   DiagramManager,
-  FlowManager
+  FlowManager,
+  AgentManager
 } from './doc-flow-kit'
 
 function App() {
@@ -18,6 +20,7 @@ function App() {
   const [projectNameInput, setProjectNameInput] = useState<string>('')
   const [activeDiagramDoc, setActiveDiagramDoc] = useState<DiagramDoc | null>(null)
   const [activeFlowDoc, setActiveFlowDoc] = useState<FlowDoc | null>(null)
+  const [activeAgentDoc, setActiveAgentDoc] = useState<AgentDoc | null>(null)
   
   // Handle project name input change
   const handleProjectNameChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -150,11 +153,61 @@ function App() {
     }
   }
 
+  // Create a new agent and add it to the current project
+  async function createNewAgent() {
+    if (!project) {
+      setStatus('No project loaded. Cannot create agent.')
+      return
+    }
+    
+    try {
+      // 1) Create the AgentDoc
+      const newAgent: AgentDoc = {
+        docId: crypto.randomUUID(),
+        docType: 'Agent',
+        title: 'Untitled Agent',
+        content: {
+          promptTemplate: `# Agent Prompt Template
+
+You are a helpful assistant that provides analysis for Why-Because Analysis (WBA).
+
+Please help the user with the following task:
+{input}
+
+Provide a thoughtful response that helps with their analysis.`
+        },
+      }
+      await docFlowKit.createDocument(newAgent)
+
+      // 2) Add reference to project
+      const newRef: DocRef = {
+        docId: newAgent.docId,
+        docType: 'Agent',
+        title: newAgent.title,
+      }
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: [...project.content.documents, newRef],
+        },
+      }
+      await saveProject(updatedProject)
+
+      setStatus('New Agent Created & Linked!')
+    } catch (error) {
+      console.error('Error creating agent:', error)
+      setStatus(`Error creating agent: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   // Load a diagram by ID
   async function loadDiagram(docId: string) {
     try {
-      // Close any active flow first
+      // Close any active documents
       setActiveFlowDoc(null);
+      setActiveAgentDoc(null);
       
       const diagram = await docFlowKit.getDocument(docId) as DiagramDoc | null
       
@@ -179,8 +232,9 @@ function App() {
   // Load a flow by ID
   async function loadFlow(docId: string) {
     try {
-      // Close any active diagram first
+      // Close any active documents
       setActiveDiagramDoc(null);
+      setActiveAgentDoc(null);
       
       const flow = await docFlowKit.getDocument(docId) as FlowDoc | null
       
@@ -199,6 +253,33 @@ function App() {
     } catch (error) {
       console.error('Error loading flow:', error)
       setStatus(`Error loading flow: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  // Load an agent by ID
+  async function loadAgent(docId: string) {
+    try {
+      // Close any active documents
+      setActiveDiagramDoc(null);
+      setActiveFlowDoc(null);
+      
+      const agent = await docFlowKit.getDocument(docId) as AgentDoc | null
+      
+      if (!agent) {
+        setStatus(`Error: Agent with ID ${docId} not found`)
+        return
+      }
+      
+      if (agent.docType !== 'Agent') {
+        setStatus(`Error: Document with ID ${docId} is not an Agent`)
+        return
+      }
+      
+      setActiveAgentDoc(agent)
+      setStatus(`Agent "${agent.title}" loaded`)
+    } catch (error) {
+      console.error('Error loading agent:', error)
+      setStatus(`Error loading agent: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -256,6 +337,33 @@ function App() {
     }
   }
 
+  // Handle agent updates
+  function handleAgentUpdate(updatedDoc: AgentDoc) {
+    setActiveAgentDoc(updatedDoc)
+    
+    // Also update the reference in the project if the title changed
+    if (project && updatedDoc.title !== activeAgentDoc?.title) {
+      const updatedDocuments = project.content.documents.map(doc => 
+        doc.docId === updatedDoc.docId 
+          ? { ...doc, title: updatedDoc.title }
+          : doc
+      )
+      
+      const updatedProject = {
+        ...project,
+        content: {
+          ...project.content,
+          documents: updatedDocuments
+        }
+      }
+      
+      // Save the updated project
+      saveProject(updatedProject).catch(error => {
+        console.error('Error updating project with new agent title:', error)
+      })
+    }
+  }
+
   // Close the active diagram
   function closeActiveDiagram() {
     setActiveDiagramDoc(null)
@@ -264,6 +372,11 @@ function App() {
   // Close the active flow
   function closeActiveFlow() {
     setActiveFlowDoc(null)
+  }
+
+  // Close the active agent
+  function closeActiveAgent() {
+    setActiveAgentDoc(null)
   }
 
   useEffect(() => {
@@ -450,6 +563,61 @@ function App() {
                 </ul>
               )}
             </div>
+
+            {/* Agents Section */}
+            <div style={{ margin: '2rem 0' }}>
+              <h3>Project Agents</h3>
+              <button 
+                onClick={createNewAgent}
+                style={{ 
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#FF5722',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  marginBottom: '1rem'
+                }}
+              >
+                + New Agent
+              </button>
+              
+              {project.content.documents.filter(d => d.docType === 'Agent').length === 0 ? (
+                <p>No agents in this project yet. Click "+ New Agent" to create one.</p>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {project.content.documents
+                    .filter(d => d.docType === 'Agent')
+                    .map(docRef => (
+                      <li 
+                        key={docRef.docId}
+                        style={{ 
+                          padding: '0.5rem', 
+                          border: '1px solid #ddd',
+                          marginBottom: '0.5rem',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span>{docRef.title || 'Untitled Agent'}</span>
+                        <button 
+                          onClick={() => loadAgent(docRef.docId)}
+                          style={{ 
+                            padding: '0.3rem 0.8rem',
+                            backgroundColor: '#FF5722',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          Open
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
           </div>
         ) : (
           <div>
@@ -519,6 +687,31 @@ function App() {
           <FlowManager
             flowDoc={activeFlowDoc}
             onUpdate={handleFlowUpdate}
+          />
+        </div>
+      )}
+
+      {/* Agent Editor Section */}
+      {activeAgentDoc && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3>Editing Agent: {activeAgentDoc.title}</h3>
+            <button 
+              onClick={closeActiveAgent}
+              style={{ 
+                padding: '0.3rem 0.8rem',
+                backgroundColor: '#607D8B', 
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px'
+              }}
+            >
+              Close Agent
+            </button>
+          </div>
+          <AgentManager
+            agentDoc={activeAgentDoc}
+            onUpdate={handleAgentUpdate}
           />
         </div>
       )}
