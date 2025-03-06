@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { DiagramDoc, GraphNode, GraphEdge } from './types'
+import { DiagramDoc, GraphNode, GraphEdge, WBANodeType } from './types'
 import { docFlowKit } from './DocFlowKit'
 
 interface DiagramManagerProps {
@@ -8,12 +8,29 @@ interface DiagramManagerProps {
 }
 
 /**
+ * Available node types for Why-Because Analysis
+ */
+const WBA_NODE_TYPES: WBANodeType[] = [
+  'Incident',
+  'Damage',
+  'Event',
+  'UnEvent',
+  'State',
+  'Assumption',
+  'Process',
+  'ActionItem',
+  'ProximateCause',
+  'GenericNode',
+]
+
+/**
  * Renders a simple list of GraphNodes and GraphEdges, allowing add/remove/edit operations.
  */
 export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
   const [title, setTitle] = useState(diagramDoc.title)
   const [nodes, setNodes] = useState<GraphNode[]>(diagramDoc.content.nodes)
   const [edges, setEdges] = useState<GraphEdge[]>(diagramDoc.content.edges)
+  const [defaultNodeType, setDefaultNodeType] = useState<WBANodeType>('Event')
 
   // For adding a new edge
   const [sourceId, setSourceId] = useState<string>('')
@@ -43,7 +60,7 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
   function addNode() {
     const newNode: GraphNode = {
       id: crypto.randomUUID(),
-      type: 'GenericNode',
+      type: defaultNodeType,
       label: 'New Node',
       properties: {},
     }
@@ -53,6 +70,12 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
   function updateNodeLabel(nodeId: string, newLabel: string) {
     setNodes((prev) =>
       prev.map((n) => (n.id === nodeId ? { ...n, label: newLabel } : n))
+    )
+  }
+
+  function updateNodeType(nodeId: string, newType: string) {
+    setNodes((prev) =>
+      prev.map((n) => (n.id === nodeId ? { ...n, type: newType } : n))
     )
   }
 
@@ -117,7 +140,23 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
 
       {/* Node Management */}
       <h4>Nodes</h4>
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div>
+          <label style={{ marginRight: '0.5rem' }}>
+            Default Node Type:
+            <select
+              value={defaultNodeType}
+              onChange={(e) => setDefaultNodeType(e.target.value as WBANodeType)}
+              style={{ padding: '0.3rem', marginLeft: '0.5rem' }}
+            >
+              {WBA_NODE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <button 
           onClick={addNode}
           style={{ padding: '0.5rem 1rem', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
@@ -131,19 +170,36 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
       ) : (
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {nodes.map((node) => (
-            <li key={node.id} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center' }}>
-              <input
-                style={{ marginRight: '0.5rem', padding: '0.3rem', flexGrow: 1 }}
-                value={node.label}
-                onChange={(e) => updateNodeLabel(node.id, e.target.value)}
-                placeholder="Node label"
-              />
-              <button 
-                onClick={() => removeNode(node.id)}
-                style={{ padding: '0.3rem 0.6rem', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                Remove
-              </button>
+            <li key={node.id} style={{ marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {/* Node Type Dropdown */}
+                <select
+                  value={node.type}
+                  onChange={(e) => updateNodeType(node.id, e.target.value)}
+                  style={{ padding: '0.3rem', minWidth: '120px' }}
+                >
+                  {WBA_NODE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Node Label Input */}
+                <input
+                  style={{ flexGrow: 1, padding: '0.3rem' }}
+                  value={node.label}
+                  onChange={(e) => updateNodeLabel(node.id, e.target.value)}
+                  placeholder="Node label"
+                />
+
+                <button
+                  onClick={() => removeNode(node.id)}
+                  style={{ padding: '0.3rem 0.6rem', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -164,7 +220,7 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
           <option value="">Select Source</option>
           {nodes.map((node) => (
             <option key={node.id} value={node.id}>
-              {node.label}
+              {node.label} ({node.type})
             </option>
           ))}
         </select>
@@ -177,7 +233,7 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
           <option value="">Select Target</option>
           {nodes.map((node) => (
             <option key={node.id} value={node.id}>
-              {node.label}
+              {node.label} ({node.type})
             </option>
           ))}
         </select>
@@ -196,8 +252,8 @@ export function DiagramManager({ diagramDoc, onUpdate }: DiagramManagerProps) {
           {edges.map((edge) => (
             <li key={edge.id} style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
               <span style={{ marginRight: '0.5rem' }}>
-                {nodes.find((n) => n.id === edge.source)?.label ?? edge.source} →{' '}
-                {nodes.find((n) => n.id === edge.target)?.label ?? edge.target}
+                {nodes.find((n) => n.id === edge.source)?.label ?? edge.source} ({nodes.find((n) => n.id === edge.source)?.type}) →{' '}
+                {nodes.find((n) => n.id === edge.target)?.label ?? edge.target} ({nodes.find((n) => n.id === edge.target)?.type})
               </span>
               <button
                 onClick={() => removeEdge(edge.id)}

@@ -18,12 +18,27 @@ export interface DocRef {
 }
 
 /**
+ * Why-Because Analysis node types
+ */
+export type WBANodeType =
+  | 'Incident'
+  | 'Damage'
+  | 'Event'
+  | 'UnEvent'
+  | 'State'
+  | 'Assumption'
+  | 'Process'
+  | 'ActionItem'
+  | 'ProximateCause'
+  | 'GenericNode'
+
+/**
  * Simple interface for node-based data (like diagrams).
  * We'll expand or reorganize later.
  */
 export interface GraphNode {
   id: string
-  type: string
+  type: string  // Can be cast to WBANodeType when needed
   label: string
   properties: Record<string, any>
 }
