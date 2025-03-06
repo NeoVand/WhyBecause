@@ -11,7 +11,8 @@ import {
   DocRef, 
   DiagramManager,
   FlowManager,
-  AgentManager
+  AgentManager,
+  FlowRunnerUI
 } from './doc-flow-kit'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
   const [activeDiagramDoc, setActiveDiagramDoc] = useState<DiagramDoc | null>(null)
   const [activeFlowDoc, setActiveFlowDoc] = useState<FlowDoc | null>(null)
   const [activeAgentDoc, setActiveAgentDoc] = useState<AgentDoc | null>(null)
+  const [showFlowRunner, setShowFlowRunner] = useState<boolean>(false)
   
   // Handle project name input change
   const handleProjectNameChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -667,22 +669,37 @@ Provide a thoughtful response that helps with their analysis.`
       )}
 
       {/* Flow Editor Section */}
-      {activeFlowDoc && project && (
+      {activeFlowDoc && project && !showFlowRunner && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3>Editing Flow: {activeFlowDoc.title}</h3>
-            <button 
-              onClick={closeActiveFlow}
-              style={{ 
-                padding: '0.3rem 0.8rem',
-                backgroundColor: '#607D8B', 
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px'
-              }}
-            >
-              Close Flow
-            </button>
+            <div>
+              <button 
+                onClick={() => setShowFlowRunner(true)}
+                style={{ 
+                  padding: '0.3rem 0.8rem',
+                  backgroundColor: '#7B1FA2', 
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  marginRight: '0.5rem'
+                }}
+              >
+                Run This Flow
+              </button>
+              <button 
+                onClick={closeActiveFlow}
+                style={{ 
+                  padding: '0.3rem 0.8rem',
+                  backgroundColor: '#607D8B', 
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px'
+                }}
+              >
+                Close Flow
+              </button>
+            </div>
           </div>
           <FlowManager
             flowDoc={activeFlowDoc}
@@ -690,6 +707,14 @@ Provide a thoughtful response that helps with their analysis.`
             project={project}
           />
         </div>
+      )}
+
+      {/* Flow Runner Section */}
+      {activeFlowDoc && project && showFlowRunner && (
+        <FlowRunnerUI 
+          flowDoc={activeFlowDoc} 
+          onClose={() => setShowFlowRunner(false)}
+        />
       )}
 
       {/* Agent Editor Section */}
